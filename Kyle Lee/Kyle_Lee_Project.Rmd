@@ -1,0 +1,71 @@
+---
+title: "Assignment 3"
+author: "Kyle Lee 27118158"
+date: "2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Q1
+```{r,warning=FALSE}
+#****************Data Setup****************#
+set.seed(1234)
+job <- read.csv("jobs.csv", header = TRUE)
+job <- data.frame(job[-c(1,15,16)])
+job[job != "psyemp"] <- 1
+job[job == "psyump"] <- 0
+
+#Setting Train and Test data set
+observ_num = nrow(job)
+trainindex <- sample(1:nrow(job), observ_num*0.75) 
+job_train <- job[trainindex, ]
+job_test <- job[-trainindex, ]
+```
+
+```{r}
+#****************Mixture Model Clustering****************#
+library(teigen)
+df_teigen <- subset(job, select=c(depress2, depress1))
+car_teigen <- teigen(df_teigen, 2,  models = "all", init="kmeans", scale = TRUE, gauss =FALSE)
+plot(car_teigen)
+
+
+df_teigen <- subset(job, select=c(income, job_seek))
+car_teigen <- teigen(df_teigen, 2,  models = "all", init="kmeans", scale = TRUE, gauss =FALSE)
+plot(car_teigen)
+
+
+
+
+```
+
+
+```{r}
+#****************Random Forest****************#
+library(randomForest)
+set.seed(1234)
+# job_rf <- randomForest(depress1~econ_hard+sex+age+occp+marital+educ+ job_seek+income, data=job_train, importance=TRUE)
+
+
+job_rf <- randomForest(depress2~., data=job_train, importance=TRUE, mtry=5)
+
+job_predicted <- predict(job_rf, job_test)
+MSE <- mean((job_predicted-job_test$depress2)^2)
+job_rf
+MSE
+# plot(job_predicted, col='red' )
+# plot(job_test$depress1)
+# 
+# 
+# plot((job_predicted-job_test$depress1)^2)
+# 
+# importance(job_rf)
+varImpPlot(job_rf)
+```
+```{r}
+
+
+```
