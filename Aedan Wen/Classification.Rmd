@@ -25,50 +25,51 @@ jobs <- jobs[!(jobs$treat == 0),]
 jobs$treat <- NULL
 jobs
 set.seed(18271398)
-ind <- sample(1:nrow(jobs), 150)
-test <- jobs[ind,]
-train <- jobs[-ind,]
+
+observ_num = nrow(jobs)
+trainindex <- sample(1:nrow(jobs), observ_num*0.75) 
+train <- jobs[trainindex, ]
+test <- jobs[-trainindex, ]
 train
 test
+print(paste('Number of non-comply in test: ', length(test$comply[test$comply == 0])))
+print(paste('Number of comply in test: ', length(test$comply[test$comply == 1])))
 ```
 
 ```{r}
 
 ```
-After K-Fold cross validating at K = 10,20,50,100,671(LOOCV) it was found the the highest accuracy for the tree was at 6 nodes giving 56% accuracy. 
+After K-Fold cross validating at K = 10,20,50,100,450(LOOCV) it was found the the highest accuracy for the tree was at 2 or 3 nodes giving 56% accuracy. 
 
 ```{r}
-set.seed(2352)
 library(tree)
 library(caret)
 library(MLmetrics)
 tree.jobs <- tree(comply~., data = train)
 ###Tried K = 10,20,50,100 and LOOCV
-#10 = 3 Node = 55.3% Acc
-#20 = 5 Nodes = 56% Accuracy
-#50 = 6 nodes at 56% Accuracy
-#50 = 6 nodes at 56% Accuracy
-#LOOCV(671) = 6 Nodes at 56% Accuracy
-length(train)
-cv.tree.jobs <- cv.tree(tree.jobs,K = 20)
+#10 = 3 Node = 56.7% Acc
+#20 = 3 Nodes = 56.7% Accuracy
+#50 = 3 nodes at 56% Accuracy
+#100 = 3 nodes at 56% Accuracy
+#LOOCV(450) = 3 Nodes at 56% Accuracy
+cv.tree.jobs <- cv.tree(tree.jobs,K = 450)
 
 plot(cv.tree.jobs)
-pr.tree.jobs <- prune.tree(tree.jobs,best = 6)
+pr.tree.jobs <- prune.tree(tree.jobs,best = 4)
 
 plot(pr.tree.jobs)
-text(pr.tree.jobs)
-plot(tree.jobs)
-text(tree.jobs, pretty=0)
+text(pr.tree.jobs, pretty = 0)
 
 preds <- predict(tree.jobs,test,type='class')
 confusionMatrix(preds,test$comply)
 print(paste('Log Loss: ',LogLoss(as.numeric(preds),as.numeric(test$comply))))
 ```
-This tree plot has the same 2 leaves on the lef
+This tree plot has the same 2 leaves on the left.
 
 ```{r}
+
 library(gclus)
-lda.jobs <- lda(comply~.,data = train, CV = TRUE)
+lda.jobs <- lda(comply~.,data = train)
 preds <- predict(lda.jobs,test)$class
 confusionMatrix(preds,test$comply)
 print(paste('Log Loss: ',LogLoss(as.numeric(preds),as.numeric(test$comply))))
@@ -86,10 +87,10 @@ print(paste('Accuracy: ' ,sum(preds == test$comply)/length(preds), '  -- mtry = 
 }
 
 ```
-Best results come from mtry= 1 or 2
+Best results come from mtry= 13/14 or 3/4
 ```{r}
 set.seed(1234)
-rf.jobs <- randomForest(comply~.,data = train, mtry = 2 )
+rf.jobs <- randomForest(comply~.,data = train, mtry = 13)
 preds <- predict(rf.jobs,test,type = 'class')
 confusionMatrix(preds,test$comply)
 print(paste('Log Loss: ',LogLoss(as.numeric(preds),as.numeric(test$comply))))
