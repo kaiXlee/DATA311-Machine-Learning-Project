@@ -12,33 +12,87 @@ Initial Data Setup
 
 ##Change Path of data
 jobs <- read.csv('/Users/aedanwen/Downloads/jobs.csv')
+##Were keeping job_disch and job_disc as numeric because its on a scale.
 jobs$treat <- as.factor(jobs$treat)
+jobs$comply <- as.factor(jobs$comply)
+#Control is the same thing as treat
 jobs$control <- NULL
+#ID tag isnt needed
 jobs$X <- NULL
+##Were only classifying those who were selected for the program.
+jobs <- jobs[!(jobs$treat == 0),]
+#We dont need this anymore
+jobs$treat <- NULL
+jobs
 set.seed(18271398)
-ind <- sample(1:nrow(jobs), 200)
+ind <- sample(1:nrow(jobs), 150)
 test <- jobs[ind,]
 train <- jobs[-ind,]
+train
+test
 ```
 
 ```{r}
 
-
 ```
+After K-Fold cross validating at K = 10,20,50,100,671(LOOCV) it was found the the highest accuracy for the tree was at 6 nodes giving 56% accuracy. 
+
 ```{r}
+set.seed(2352)
 library(tree)
 library(caret)
-tree.jobs <- tree(treat~., data = train)
+library(MLmetrics)
+tree.jobs <- tree(comply~., data = train)
+###Tried K = 10,20,50,100 and LOOCV
+#10 = 3 Node = 55.3% Acc
+#20 = 5 Nodes = 56% Accuracy
+#50 = 6 nodes at 56% Accuracy
+#50 = 6 nodes at 56% Accuracy
+#LOOCV(671) = 6 Nodes at 56% Accuracy
+length(train)
+cv.tree.jobs <- cv.tree(tree.jobs,K = 20)
+
+plot(cv.tree.jobs)
+pr.tree.jobs <- prune.tree(tree.jobs,best = 6)
+
+plot(pr.tree.jobs)
+text(pr.tree.jobs)
 plot(tree.jobs)
-text(tree.jobs)
+text(tree.jobs, pretty=0)
+
 preds <- predict(tree.jobs,test,type='class')
-confusionMatrix(preds,test$treat)
+confusionMatrix(preds,test$comply)
+print(paste('Log Loss: ',LogLoss(as.numeric(preds),as.numeric(test$comply))))
 ```
+This tree plot has the same 2 leaves on the lef
+
 ```{r}
 library(gclus)
-lda.jobs <- lda(treat~.,train)
-preds <- predict(lda.jobs,test)
-confusionMatrix(preds,test$treat,preds)
+lda.jobs <- lda(comply~.,data = train, CV = TRUE)
+preds <- predict(lda.jobs,test)$class
+confusionMatrix(preds,test$comply)
+print(paste('Log Loss: ',LogLoss(as.numeric(preds),as.numeric(test$comply))))
+plot(lda.jobs)
+```
 
+```{r}
+set.seed(1234)
+library(randomForest)
+?randomForest
+for(i in 1:14){
+rf.jobs <- randomForest(comply~.,data = train, mtry = i )
+preds <- predict(rf.jobs,test,type = 'class')
+print(paste('Accuracy: ' ,sum(preds == test$comply)/length(preds), '  -- mtry = ',i))
+}
+
+```
+Best results come from mtry= 1 or 2
+```{r}
+set.seed(1234)
+rf.jobs <- randomForest(comply~.,data = train, mtry = 2 )
+preds <- predict(rf.jobs,test,type = 'class')
+confusionMatrix(preds,test$comply)
+print(paste('Log Loss: ',LogLoss(as.numeric(preds),as.numeric(test$comply))))
+plot(rf.jobs)
 ```
 
