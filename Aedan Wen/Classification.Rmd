@@ -1,0 +1,44 @@
+---
+title: "Jobs"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Initial Data Setup
+```{r}
+
+##Change Path of data
+jobs <- read.csv('/Users/aedanwen/Downloads/jobs.csv')
+jobs$treat <- as.factor(jobs$treat)
+jobs$control <- NULL
+jobs$X <- NULL
+set.seed(18271398)
+ind <- sample(1:nrow(jobs), 200)
+test <- jobs[ind,]
+train <- jobs[-ind,]
+```
+
+```{r}
+
+
+```
+```{r}
+library(tree)
+library(caret)
+tree.jobs <- tree(treat~., data = train)
+plot(tree.jobs)
+text(tree.jobs)
+preds <- predict(tree.jobs,test,type='class')
+confusionMatrix(preds,test$treat)
+```
+```{r}
+library(gclus)
+lda.jobs <- lda(treat~.,train)
+preds <- predict(lda.jobs,test)
+confusionMatrix(preds,test$treat,preds)
+
+```
+
