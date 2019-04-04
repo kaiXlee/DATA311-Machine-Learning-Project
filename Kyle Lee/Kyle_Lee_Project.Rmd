@@ -14,28 +14,28 @@ knitr::opts_chunk$set(echo = TRUE)
 #****************Data Setup****************#
 set.seed(1234)
 job <- read.csv("jobs.csv", header = TRUE)
-job <- data.frame(job[-c(1,15,16)])
-job[job != "psyemp"] <- 1
-job[job == "psyump"] <- 0
-
+job <- data.frame(job[-c(1,16)])
+# job <- job[!(job$treat == 1 & job$comply ==0),]
+job$treat <- as.factor(job$treat)
+job$comply <- as.factor(job$comply)
 #Setting Train and Test data set
 observ_num = nrow(job)
-trainindex <- sample(1:nrow(job), observ_num*0.75) 
+trainindex <- sample(1:nrow(job), observ_num*0.75)
 job_train <- job[trainindex, ]
 job_test <- job[-trainindex, ]
 ```
 
 ```{r}
-#****************Mixture Model Clustering****************#
-library(teigen)
-df_teigen <- subset(job, select=c(depress2, depress1))
-car_teigen <- teigen(df_teigen, 2,  models = "all", init="kmeans", scale = TRUE, gauss =FALSE)
-plot(car_teigen)
-
-
-df_teigen <- subset(job, select=c(income, job_seek))
-car_teigen <- teigen(df_teigen, 2,  models = "all", init="kmeans", scale = TRUE, gauss =FALSE)
-plot(car_teigen)
+# #****************Mixture Model Clustering****************#
+# library(teigen)
+# df_teigen <- subset(job, select=c(depress2, depress1))
+# car_teigen <- teigen(df_teigen, 2,  models = "all", init="kmeans", scale = TRUE, gauss =FALSE)
+# plot(car_teigen)
+# 
+# 
+# df_teigen <- subset(job, select=c(income, job_seek))
+# car_teigen <- teigen(df_teigen, 2,  models = "all", init="kmeans", scale = TRUE, gauss =FALSE)
+# plot(car_teigen)
 
 
 
@@ -46,26 +46,56 @@ plot(car_teigen)
 ```{r}
 #****************Random Forest****************#
 library(randomForest)
-set.seed(1234)
-# job_rf <- randomForest(depress1~econ_hard+sex+age+occp+marital+educ+ job_seek+income, data=job_train, importance=TRUE)
-
 
 job_rf <- randomForest(depress2~., data=job_train, importance=TRUE, mtry=5)
 
 job_predicted <- predict(job_rf, job_test)
-MSE <- mean((job_predicted-job_test$depress2)^2)
-job_rf
-MSE
-# plot(job_predicted, col='red' )
-# plot(job_test$depress1)
-# 
-# 
-# plot((job_predicted-job_test$depress1)^2)
-# 
-# importance(job_rf)
+
+RSS <- ((job_predicted-job_test$depress2)^2)
+MSE = mean(RSS)
+paste("RF Depress2 Test MSE: ", MSE)
+paste("Out-of-Bag MSE: ", job_rf$mse[job_rf$ntree])
+
+##RSS Visual Plot
+x <- seq(1,length(job_predicted), by=1)
+plot(job_predicted, ylim=c(1,5), col='red' )
+title(main="Predicted depress2 and Actualy Depress2")
+points(job_test$depress2)
+segments(x0=x, y0=job_predicted, x1=x, y1=job_test$depress2)
+
+##RSS Value Plot
+plot(RSS, type="o")
+title(main="RF Depress2 Prediction RSS")
+
 varImpPlot(job_rf)
 ```
+
+
 ```{r}
+#**************** Tree ****************#
+library(tree)
 
-
+depress2_tree <- tree(depress2~., data=job_train)
+plot(depress2_tree)
+text(depress2_tree, pretty=0)
+#Manually try K=20, 50, 100, 300, LOOCV
+cv_depress2 <- cv.tree(depress2_tree, K=674)
+plot(cv_depress2)
+prediction <- predict(depress2_tree, job_test)
+MSE = mean((prediction-job_test$depress2)^2)
+print(MSE)
 ```
+Trying K=20, 50, 200, 400, LOOCV, the result suggests 5,7,7,8,7,9  numbers of nodes provides the best long run MSE for our tree. Therefore, picking the highest occurance of suggestion: 7, this suggests that to avoid overfitting, we should prune the to a node size of 7
+```{r}
+pruned_depress2 <- prune.tree(depress2_tree, best=4)
+plot(pruned_depress2)
+text(pruned_depress2, pretty=0)
+prediction <- predict(pruned_depress2, job_test)
+MSE = mean((prediction-job_test$depress2)^2)
+print(MSE)
+prediction <- predict(job_rf, job_train)
+MSE = mean((prediction-job_train$depress2)^2)
+print(MSE)
+```
+The MSE calculated from our prediction of the testing set using the pruned tree is indeed lower than than our original tree. 
+MSE Pruned:0.4037717 < MSE unpruned:0.4054654
