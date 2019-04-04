@@ -1,0 +1,53 @@
+---
+title: "Hier"
+author: "Amat Zahra"
+date: "March 28, 2019"
+output: html_document
+---
+
+data <- read.csv("jobs.csv", header=TRUE)
+#names(data)
+#new_data = data[,c(7,8,9,10,14,16)]
+#numbers_only <- data[,-c(7,8,9,10,14,16)]
+#ndata <- na.omit(data)
+#n_data <- na.omit(numbers_only)
+
+
+##WARD
+rownames(numbers_only) <- data[,1]
+d <- suppressWarnings(dist(numbers_only, method="euclidean"))
+fit <- hclust(d, method="ward.D")
+plot(fit)
+rect.hclust(fit, k=2, border="red")
+
+##WARD.D2
+fit2 <- hclust(d, method="ward.D2")
+plot(fit2)
+rect.hclust(fit2, k=3, border="red")
+
+
+##SINGLE
+clusterSingle <- hclust(dist(data[, 2:3]), method = 'single')
+plot(clusterSingle)
+cut_single <- cutree(clusterSingle, k = 2)
+plot(clusterSingle)
+rect.hclust(clusterSingle , k = 2, border = 1:2)
+abline(h = 2, col = 'red')
+
+##AVERAGE
+clusterAverage <- hclust(dist(data[, 2:3]), method = 'average')
+plot(clusterAverage)
+cut_avg <- cutree(clusterAverage, k = 3)
+plot(clusterAverage)
+rect.hclust(clusterAverage , k = 3, border = 2:6)
+abline(h = 3, col = 'red')
+
+
+##COMPLETE
+clusterComplete <- hclust(dist(data[, 2:3]), method = 'complete')
+plot(clusterComplete)
+cut_com <- cutree(clusterComplete, k = 4)
+plot(clusterComplete)
+rect.hclust(clusterComplete , k = 4, border = 2:6)
+abline(h = 4, col = 'red')
+
