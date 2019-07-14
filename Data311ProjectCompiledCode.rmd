@@ -1,0 +1,285 @@
+---
+title: "Data311_JobsStudy_Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+PATH = '/path/to/data/'
+```
+Regression
+
+```{r,warning=FALSE}
+#****************Data Setup****************#
+set.seed(1234)
+job <- read.csv(PATH, header = TRUE)
+job <- data.frame(job[-c(1,16)])
+# job <- job[!(job$treat == 1 & job$comply ==0),]
+job$treat <- as.factor(job$treat)
+job$comply <- as.factor(job$comply)
+#Setting Train and Test data set
+observ_num = nrow(job)
+trainindex <- sample(1:nrow(job), observ_num*0.75)
+job_train <- job[trainindex, ]
+job_test <- job[-trainindex, ]
+```
+
+```{r}
+#****************Random Forest****************#
+library(randomForest)
+
+job_rf <- randomForest(depress2~., data=job_train, importance=TRUE, mtry=5)
+
+job_predicted <- predict(job_rf, job_test)
+
+RSS <- ((job_predicted-job_test$depress2)^2)
+MSE = mean(RSS)
+paste("RF Depress2 Test MSE: ", MSE)
+paste("Out-of-Bag MSE: ", job_rf$mse[job_rf$ntree])
+
+##RSS Visual Plot
+x <- seq(1,length(job_predicted), by=1)
+plot(job_predicted, ylim=c(1,5), col='red' )
+title(main="Predicted depress2 and Actualy Depress2")
+points(job_test$depress2)
+segments(x0=x, y0=job_predicted, x1=x, y1=job_test$depress2)
+
+##RSS Value Plot
+plot(RSS, type="o")
+title(main="RF Depress2 Prediction RSS")
+
+varImpPlot(job_rf)
+```
+
+```{r}
+#**************** Tree ****************#
+library(tree)
+
+depress2_tree <- tree(depress2~., data=job_train)
+plot(depress2_tree)
+text(depress2_tree, pretty=0)
+#Manually try K=20, 50, 100, 300, LOOCV
+cv_depress2 <- cv.tree(depress2_tree, K=674)
+plot(cv_depress2)
+prediction <- predict(depress2_tree, job_test)
+MSE = mean((prediction-job_test$depress2)^2)
+print(MSE)
+```
+```{r}
+pruned_depress2 <- prune.tree(depress2_tree, best=4)
+plot(pruned_depress2)
+text(pruned_depress2, pretty=0)
+prediction <- predict(pruned_depress2, job_test)
+MSE = mean((prediction-job_test$depress2)^2)
+print(MSE)
+prediction <- predict(job_rf, job_train)
+MSE = mean((prediction-job_train$depress2)^2)
+print(MSE)
+
+```
+
+```{r}
+library(data.table)
+library(glmnet)
+library(ggplot2)
+library(caret)
+library(mlbench)
+
+##Change Path of data
+jobs <- read.csv(PATH)
+##Were keeping job_disch and job_disc as numeric because its on a scale.
+jobs$treat <- as.factor(jobs$treat)
+jobs$comply <- as.factor(jobs$comply)
+#Control is the same thing as treat
+jobs$control <- NULL
+#ID tag isnt needed
+jobs$X <- NULL
+jobs
+set.seed(1234)
+
+observ_num = nrow(jobs)
+trainindex <- sample(1:nrow(jobs), observ_num*0.75) 
+train <- jobs[trainindex, ]
+test <- jobs[-trainindex, ]
+model1 <- lm(depress2 ~ depress1 + job_seek + work1 , data = train)
+summary(model1)
+preds <- predict(model1,test)
+eq <- preds - test$depress2
+eq <- eq^2
+mean(eq)
+
+plot(model1)
+MSE <- mean((preds - test$depress2)^2)
+MSE
+
+
+l <- pairs(jobs$depress2 ~ jobs$depress1 + jobs$job_seek + jobs$work1)
+
+
+```
+
+Classification
+
+
+Initial Data Setup
+```{r}
+
+jobs <- read.csv(PATH)
+##Were keeping job_disch and job_disc as numeric because its on a scale.
+jobs$treat <- as.factor(jobs$treat)
+jobs$comply <- as.factor(jobs$comply)
+#Control is the same thing as treat
+jobs$control <- NULL
+#ID tag isnt needed
+jobs$X <- NULL
+##Were only classifying those who were selected for the program.
+jobs <- jobs[!(jobs$treat == 0),]
+#We dont need this anymore
+jobs$treat <- NULL
+jobs
+set.seed(18271398)
+
+observ_num = nrow(jobs)
+trainindex <- sample(1:nrow(jobs), observ_num*0.75) 
+train <- jobs[trainindex, ]
+test <- jobs[-trainindex, ]
+train
+test
+print(paste('Number of non-comply in test: ', length(test$comply[test$comply == 0])))
+print(paste('Number of comply in test: ', length(test$comply[test$comply == 1])))
+print(paste(length(jobs$comply[jobs$comply == 1])/6,'% of people selected for treatment complied in the whole dataset'))
+```
+
+After K-Fold cross validating at K = 10,20,50,100,450(LOOCV) it was found the the highest accuracy for the tree was at 4 nodes giving 55.3% accuracy. 
+
+```{r}
+library(tree)
+library(caret)
+library(MLmetrics)
+tree.jobs <- tree(comply~., data = train)
+
+cv.tree.jobs <- cv.tree(tree.jobs,K = 450)
+
+plot(cv.tree.jobs)
+pr.tree.jobs <- prune.tree(tree.jobs,best = 4)
+
+plot(pr.tree.jobs)
+text(pr.tree.jobs, pretty = 0)
+
+preds <- predict(tree.jobs,test,type='class')
+confusionMatrix(preds,test$comply)
+print(paste('Log Loss: ',LogLoss(as.numeric(preds),as.numeric(test$comply))))
+```
+This tree plot has the same 2 leaves on the left.
+
+
+```{r}
+set.seed(1234)
+library(randomForest)
+for(i in 1:14){
+rf.jobs <- randomForest(comply~.,data = train, mtry = i )
+preds <- predict(rf.jobs,test,type = 'class')
+print(paste('Accuracy: ' ,sum(preds == test$comply)/length(preds), '  -- mtry = ',i))
+}
+
+```
+Best results come from mtry= 6/9/10
+30 Trees seems to have lowest error OOB error rate from the plot and outpreforms ntrees = 500 on the testing set
+```{r}
+set.seed(1234)
+rf500.jobs <- randomForest(comply~.,data = train, mtry = 6)
+rf30.jobs <- randomForest(comply~.,data = train, mtry = 6,ntree = 30)
+preds500 <- predict(rf500.jobs,test,type = 'class')
+preds30 <- predict(rf30.jobs,test,type = 'class')
+confusionMatrix(preds30,test$comply)
+print(paste('Log Loss: ',LogLoss(as.numeric(preds),as.numeric(test$comply))))
+plot(rf500.jobs)
+plot(rf30.jobs)
+varImpPlot(rf30.jobs)
+```
+```{r}
+plot(rf500.jobs, main = 'Error vs Number of Trees')
+plot(rf30.jobs)
+```
+
+```{r}
+set.seed(1234)
+numeric_cols <- c(1,2,4,10,11,14,15)
+pcaJobs <- prcomp(~.,data = jobs[numeric_cols],scale.=TRUE)
+summary(pcaJobs)
+biplot(pcaJobs)
+###Best Results were gotten at 3 PCs (Kaiser Criterion)
+pcaJobs.data <- cbind(pcaJobs$x[,1:3], jobs['comply'])
+colnames(pcaJobs.data) <- c('JobSearch_PC1','Depression_PC2','Age_PC3','comply')
+set.seed(18271398)
+observ_num = nrow(pcaJobs.data)
+pca.trainindex <- sample(1:nrow(pcaJobs.data), observ_num*0.75) 
+pca.train <- pcaJobs.data[pca.trainindex, ]
+pca.test <- pcaJobs.data[-pca.trainindex, ]
+pca.train
+pca.test
+pcaJobs
+```
+```{r}
+library(tree)
+library(caret)
+pca.tree <-tree(comply~., data = pca.train)
+pca.tree.preds <- predict(pca.tree,pca.test,type='class')
+confusionMatrix(pca.tree.preds,pca.test$comply)
+plot(pca.tree)
+text(pca.tree,pretty = 0)
+```
+Choosing to put only PCA tree because of space reasons
+```{r}
+library(randomForest)
+#Best ntrees seems to be at about 500. 
+pca.rf <- randomForest(comply~.,data = pca.train)
+plot(pca.rf)
+pca.rf.preds <- predict(pca.rf,pca.test,type= 'class')
+confusionMatrix(pca.rf.preds,pca.test$comply)
+```
+
+Clustering 
+
+```{r}
+#***********Hierarchical
+data <- read.csv(PATH, header=TRUE)
+#names(data)
+#new_data = data[,c(7,8,9,10,14,16)]
+#numbers_only <- data[,-c(7,8,9,10,14,16)]
+#ndata <- na.omit(data)
+#n_data <- na.omit(numbers_only)
+##WARD
+rownames(numbers_only) <- data[,1]
+d <- suppressWarnings(dist(numbers_only, method="euclidean"))
+fit <- hclust(d, method="ward.D")
+plot(fit)
+rect.hclust(fit, k=2, border="red")
+##WARD.D2
+fit2 <- hclust(d, method="ward.D2")
+plot(fit2)
+rect.hclust(fit2, k=3, border="red")
+##SINGLE
+clusterSingle <- hclust(dist(data[, 2:3]), method = 'single')
+plot(clusterSingle)
+cut_single <- cutree(clusterSingle, k = 2)
+plot(clusterSingle)
+rect.hclust(clusterSingle , k = 2, border = 1:2)
+abline(h = 2, col = 'red')
+##AVERAGE
+clusterAverage <- hclust(dist(data[, 2:3]), method = 'average')
+plot(clusterAverage)
+cut_avg <- cutree(clusterAverage, k = 3)
+plot(clusterAverage)
+rect.hclust(clusterAverage , k = 3, border = 2:6)
+abline(h = 3, col = 'red')
+##COMPLETE
+clusterComplete <- hclust(dist(data[, 2:3]), method = 'complete')
+plot(clusterComplete)
+cut_com <- cutree(clusterComplete, k = 4)
+plot(clusterComplete)
+rect.hclust(clusterComplete , k = 4, border = 2:6)
+abline(h = 4, col = 'red')
+```
