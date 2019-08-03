@@ -12,33 +12,119 @@ Initial Data Setup
 
 ##Change Path of data
 jobs <- read.csv('/Users/aedanwen/Downloads/jobs.csv')
+##Were keeping job_disch and job_disc as numeric because its on a scale.
 jobs$treat <- as.factor(jobs$treat)
+jobs$comply <- as.factor(jobs$comply)
+#Control is the same thing as treat
 jobs$control <- NULL
+#ID tag isnt needed
 jobs$X <- NULL
+##Were only classifying those who were selected for the program.
+jobs <- jobs[!(jobs$treat == 0),]
+#We dont need this anymore
+jobs$treat <- NULL
+jobs
 set.seed(18271398)
-ind <- sample(1:nrow(jobs), 200)
-test <- jobs[ind,]
-train <- jobs[-ind,]
+
+observ_num = nrow(jobs)
+trainindex <- sample(1:nrow(jobs), observ_num*0.75) 
+train <- jobs[trainindex, ]
+test <- jobs[-trainindex, ]
+train
+test
+print(paste('Number of non-comply in test: ', length(test$comply[test$comply == 0])))
+print(paste('Number of comply in test: ', length(test$comply[test$comply == 1])))
+print(paste(length(jobs$comply[jobs$comply == 1])/6,'% of people selected for treatment complied in the whole dataset'))
+```
+
+After K-Fold cross validating at K = 10,20,50,100,450(LOOCV) it was found the the highest accuracy for the tree was at 4 nodes giving 55.3% accuracy. 
+
+```{r}
+library(tree)
+library(caret)
+library(MLmetrics)
+tree.jobs <- tree(comply~., data = train)
+
+cv.tree.jobs <- cv.tree(tree.jobs,K = 450)
+
+plot(cv.tree.jobs)
+pr.tree.jobs <- prune.tree(tree.jobs,best = 4)
+
+plot(pr.tree.jobs)
+text(pr.tree.jobs, pretty = 0)
+
+preds <- predict(tree.jobs,test,type='class')
+confusionMatrix(preds,test$comply)
+print(paste('Log Loss: ',LogLoss(as.numeric(preds),as.numeric(test$comply))))
+```
+This tree plot has the same 2 leaves on the left.
+
+
+```{r}
+set.seed(1234)
+library(randomForest)
+?randomForest
+for(i in 1:14){
+rf.jobs <- randomForest(comply~.,data = train, mtry = i )
+preds <- predict(rf.jobs,test,type = 'class')
+print(paste('Accuracy: ' ,sum(preds == test$comply)/length(preds), '  -- mtry = ',i))
+}
+
+```
+Best results come from mtry= 6/9/10
+30 Trees seems to have lowest error OOB error rate from the plot and outpreforms ntrees = 500 on the testing set
+```{r}
+set.seed(1234)
+rf500.jobs <- randomForest(comply~.,data = train, mtry = 6)
+rf30.jobs <- randomForest(comply~.,data = train, mtry = 6,ntree = 30)
+preds500 <- predict(rf500.jobs,test,type = 'class')
+preds30 <- predict(rf30.jobs,test,type = 'class')
+confusionMatrix(preds30,test$comply)
+print(paste('Log Loss: ',LogLoss(as.numeric(preds),as.numeric(test$comply))))
+plot(rf500.jobs)
+plot(rf30.jobs)
+varImpPlot(rf30.jobs)
+```
+```{r}
+plot(rf500.jobs, main = 'Error vs Number of Trees')
+plot(rf30.jobs)
 ```
 
 ```{r}
-
-
+set.seed(1234)
+numeric_cols <- c(1,2,4,10,11,14,15)
+pcaJobs <- prcomp(~.,data = jobs[numeric_cols],scale.=TRUE)
+summary(pcaJobs)
+biplot(pcaJobs)
+###Best Results were gotten at 3 PCs (Kaiser Criterion)
+pcaJobs.data <- cbind(pcaJobs$x[,1:3], jobs['comply'])
+colnames(pcaJobs.data) <- c('JobSearch_PC1','Depression_PC2','Age_PC3','comply')
+set.seed(18271398)
+observ_num = nrow(pcaJobs.data)
+pca.trainindex <- sample(1:nrow(pcaJobs.data), observ_num*0.75) 
+pca.train <- pcaJobs.data[pca.trainindex, ]
+pca.test <- pcaJobs.data[-pca.trainindex, ]
+pca.train
+pca.test
+pcaJobs
 ```
 ```{r}
 library(tree)
 library(caret)
-tree.jobs <- tree(treat~., data = train)
-plot(tree.jobs)
-text(tree.jobs)
-preds <- predict(tree.jobs,test,type='class')
-confusionMatrix(preds,test$treat)
+pca.tree <-tree(comply~., data = pca.train)
+pca.tree.preds <- predict(pca.tree,pca.test,type='class')
+confusionMatrix(pca.tree.preds,pca.test$comply)
+plot(pca.tree)
+text(pca.tree,pretty = 0)
 ```
+Choosing to put only PCA tree because of space reasons
 ```{r}
-library(gclus)
-lda.jobs <- lda(treat~.,train)
-preds <- predict(lda.jobs,test)
-confusionMatrix(preds,test$treat,preds)
+library(randomForest)
+#Best ntrees seems to be at about 500. 
+pca.rf <- randomForest(comply~.,data = pca.train)
+plot(pca.rf)
+pca.rf.preds <- predict(pca.rf,pca.test,type= 'class')
+confusionMatrix(pca.rf.preds,pca.test$comply)
+
 
 ```
-
